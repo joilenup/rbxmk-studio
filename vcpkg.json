@@ -1,0 +1,5 @@
+{
+  "name": "rbxmk-studio",
+  "version-string": "0.1.0",
+  "dependencies": ["lz4", "cpr", "luau", "libxml2", "nlohmann-json"]
+}

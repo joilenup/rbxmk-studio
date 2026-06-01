@@ -1,0 +1,119 @@
+name: "Build for all platforms"
+on:
+  pull_request:
+  push:
+jobs:
+  build-mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Filament
+        run: |
+          curl -L \
+            https://github.com/google/filament/releases/download/v1.71.5/filament-v1.71.5-mac.tgz \
+            -o ./filament.tgz
+
+          tar -xzf ./filament.tgz
+          mv ./filament ./assets/filament-platform/macOS/
+
+      - uses: open-vcpkg/setup-vcpkg@v1
+      - uses: lukka/get-cmake@latest
+      - uses: tecolicom/actions-use-homebrew-tools@v1
+        with:
+          tools: just ninja pkg-config automake qt
+      - run: cmake -S . -B build -G Ninja -DPLATFORM=macos -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/dist -DCMAKE_PREFIX_PATH=$(brew --prefix qt) -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake && cmake --build build && cmake --install build && $(brew --prefix qt)/bin/macdeployqt ${{ github.workspace }}/dist/rbxmk-studio.app -verbose=2 && zip -r ${{ github.workspace }}/rbxmk-studio-macos.zip ${{ github.workspace }}/dist/rbxmk-studio.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbxmk-studio-macos.zip
+          path: ${{ github.workspace }}/rbxmk-studio-macos.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Filament
+        run: |
+          curl -L \
+            https://github.com/google/filament/releases/download/v1.71.5/filament-v1.71.5-linux.tgz \
+            -o ./filament.tgz
+
+          tar -xzf ./filament.tgz
+          mv ./filament ./assets/filament-platform/linux/
+
+      - uses: open-vcpkg/setup-vcpkg@v1
+      - uses: lukka/get-cmake@latest
+      - uses: tecolicom/actions-use-homebrew-tools@v1
+        with:
+          tools: just ninja pkg-config automake qt
+
+      - run: cmake -S . -B build -G Ninja -DPLATFORM=linux -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/dist -DCMAKE_PREFIX_PATH=$(brew --prefix qt) -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake && cmake --build build && cmake --install build && zip -r ${{ github.workspace }}/rbxmk-studio-linux.zip ${{ github.workspace }}/dist/rbxmk-studio
+
+      - name: Upload linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbxmk-studio-linux.zip
+          path: ${{ github.workspace }}/rbxmk-studio-linux.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: open-vcpkg/setup-vcpkg@v1
+      - uses: lukka/get-cmake@latest
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.9.1
+
+      - name: Download Filament
+        shell: pwsh
+        run: |
+          $FILAMENT_VERSION = "1.71.5"
+
+          Invoke-WebRequest `
+            -Uri "https://github.com/google/filament/releases/download/v$FILAMENT_VERSION/filament-v$FILAMENT_VERSION-windows.tgz" `
+            -OutFile .\filament.tgz
+
+          tar -xzf .\filament.tgz
+
+          Move-Item `
+            ".\filament-v$FILAMENT_VERSION-windows" `
+            ".\assets\filament-platform"
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DPLATFORM=windows `
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}\dist" `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+
+          cmake --build build
+          cmake --install build
+
+      - name: Deploy Qt
+        shell: pwsh
+        run: |
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" `
+            "${{ github.workspace }}\dist\rbxmk-studio.exe"
+
+          Compress-Archive `
+            -Path "${{ github.workspace }}\dist\*" `
+            -DestinationPath "${{ github.workspace }}\rbxmk-studio-windows.zip"
+
+      - name: Upload windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbxmk-studio-windows.zip
+          path: ${{ github.workspace }}/rbxmk-studio-windows.zip
